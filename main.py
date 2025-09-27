@@ -77,16 +77,25 @@ class MusicaDownloaderApp:
     def download_videos(self):
         formato = self.format_var.get()
         folder = self.output_folder
+        errores = []
 
         for i, url in enumerate(self.urls, start=1):
             ydl_opts = {
                 'outtmpl': os.path.join(folder, '%(title)s.%(ext)s'),
                 'noplaylist': True,
+                'ignoreerrors': True,
+                'extract_flat': False,
+                # Opciones adicionales para evitar errores 403
+                'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'referer': 'https://www.youtube.com/',
+                # Intentar diferentes formatos si falla
+                'format_sort': ['quality', 'res', 'fps', 'hdr:12', 'codec:vp9.2', 'size', 'br', 'asr'],
             }
 
             if formato == "mp3":
                 ydl_opts.update({
-                    'format': 'bestaudio/best',
+                    # Múltiples opciones de formato para evitar errores de merging
+                    'format': 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
                     'postprocessors': [{
                         'key': 'FFmpegExtractAudio',
                         'preferredcodec': 'mp3',
@@ -94,19 +103,32 @@ class MusicaDownloaderApp:
                     }],
                 })
             else:  # mp4
-                ydl_opts.update({'format': 'bestvideo+bestaudio/best'})
+                # Opciones mejoradas para video
+                ydl_opts.update({
+                    'format': 'best[height<=720]/bestvideo[height<=720]+bestaudio/best'
+                })
 
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([url])
             except Exception as e:
-                messagebox.showerror("Error en descarga", f"No se pudo descargar {url}\n{str(e)}")
+                error_msg = f"Error descargando {url}: {str(e)}"
+                errores.append(error_msg)
+                print(error_msg)  # Mostrar en consola para debug
 
             # Actualizar progreso
             self.progress["value"] = i
             self.root.update_idletasks()
 
-        messagebox.showinfo("Éxito", "Todas las descargas se completaron 🎶")
+        # Mostrar resultado final
+        if errores:
+            error_text = "\n".join(errores[:5])  # Solo mostrar primeros 5 errores
+            if len(errores) > 5:
+                error_text += f"\n... y {len(errores) - 5} errores más"
+            messagebox.showwarning("Descarga completada con errores", 
+                                 f"Completado con {len(errores)} errores:\n\n{error_text}")
+        else:
+            messagebox.showinfo("Éxito", "Todas las descargas se completaron exitosamente 🎶")
 
 
 if __name__ == "__main__":
